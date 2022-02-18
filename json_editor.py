@@ -28,8 +28,8 @@ class Json_Editor():
                 #First we load existing data into a dict.
                 file_data = json.load(file)
                 drone = {}
-                x_initial=-20
-                y_initial=20
+                x_initial=-30
+                y_initial=30
                 positions=[]
                 pose_x=x_initial
                 pose_y=y_initial
