@@ -1,0 +1,29 @@
+{
+    "name": "predator",
+    "Vehicles": {
+        "Drone1": {
+            "VehicleType": "SimpleFlight",
+            "X": -20,
+            "Y": 20,
+            "Z": 0
+        },
+        "Drone2": {
+            "VehicleType": "SimpleFlight",
+            "X": -20,
+            "Y": 24,
+            "Z": 0
+        },
+        "Drone3": {
+            "VehicleType": "SimpleFlight",
+            "X": -20,
+            "Y": 28,
+            "Z": 0
+        },
+        "Drone4": {
+            "VehicleType": "SimpleFlight",
+            "X": -20,
+            "Y": 32,
+            "Z": 0
+        }
+    }
+}
