@@ -1,12 +1,17 @@
 import airsim
 import numpy as np
 from airsim_update import Airsim_Updater
+from low_level_updates import Low_Level_Updates
 
 
+low_control=Low_Level_Updates()
 
-updater=Airsim_Updater()
+pose=[[0,0,5],[0,1,5]]
 
-pose=[[0,0,1.2],[0,0,1],[0,0,1.1],[0,0,1.3]]
+low_control.set_target_poses(pose)
 
-updater.set_drone_locs(pose)
-updater.get_states(2)
+action=[4,4]
+
+
+for i in range(20):
+    low_control.step(actions=action)

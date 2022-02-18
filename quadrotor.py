@@ -271,31 +271,18 @@ class Quadrotor:
 
 
 
-    def simulate(self, dtau, current_traj, final_target, std_list, method="Backstepping_4"):
-    #     states: [x,y,z,phi,theta,psi,x_dot,y_dot,z_dot,phi_dot,theta_dot,psi_dot]
-        r_std, phi_std, theta_std, psi_std = std_list[0], std_list[1], std_list[2], std_list[3]
-        fail_check = False
+    def simulate(self, dtau, current_traj, method="Backstepping_4"):
 
         ## Add noise, if you wish ##
-        self.state[6] = normal(self.state[6], 0*r_std / 3.0)
-        self.state[7] = normal(self.state[7], 0*r_std / 3.0)
-        self.state[8] = normal(self.state[8], 0*r_std / 3.0)
-        self.state[9] = normal(self.state[9], 0*phi_std)
-        self.state[10] = normal(self.state[10], 0*theta_std)
-        self.state[11] = normal(self.state[11], 0*psi_std)
+        self.state[6] = normal(self.state[6], 0/ 3.0)
+        self.state[7] = normal(self.state[7], 0 / 3.0)
+        self.state[8] = normal(self.state[8], 0 / 3.0)
+        self.state[9] = normal(self.state[9], 0)
+        self.state[10] = normal(self.state[10], 0)
+        self.state[11] = normal(self.state[11], 0)
 
         U = self.get_control_input(method, current_traj)
 
         sol = integrate.solve_ivp(fun=self.model_dynamics, t_span=(0, dtau), y0=self.state)
         self.state = sol.y[:,-1]
         self.U = U
-
-        if (np.abs(self.state[3]) > np.pi/2)  | (np.abs(self.state[4]) > np.pi/2):
-            self.costValue = 1e12
-            fail_check = True
-        else:
-            target = [current_traj[0], current_traj[1], current_traj[2], current_traj[13]]
-            self.calculate_cost(target=target, final_target=final_target)
-
-        
-        return fail_check
