@@ -3,12 +3,9 @@ from gym import spaces, error, utils
 from gym.utils import seeding
 #from gym.envs.classic_control import rendering
 import numpy as np
-import configparser
 from os import path
 import itertools
-import random
-import pdb
-from quadrotor_dynamics import Quadrotor, Drone, Bot
+from quadrotor_dynamics import Drone, Bot
 from numpy.random import uniform
 from time import sleep
 from collections import deque
