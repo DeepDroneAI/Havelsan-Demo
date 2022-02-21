@@ -59,20 +59,9 @@ class Trainer(object):
         episode = []
         stat = dict()
         info = dict()
-        switch_t = -1
 
-        surveillance_rate_list = []
-        episode_rate_list = []
 
-        if self.args.scenario == 'planning':
-
-            print("\nEpisode:{} \nSurveillance Rate:".format(epoch))
-            self.bar.start()
-            total_obs, info = self.env.reset()
-            state, uncertainty_map = total_obs
-
-        elif self.args.scenario == 'predator':
-            state = self.env.reset()           
+        state = self.env.reset()   
 
         prev_hid = torch.zeros(1, self.args.nagents, self.args.hid_size)
 
@@ -83,17 +72,8 @@ class Trainer(object):
             if t == 0 and self.args.hard_attn and self.args.commnet:
                 info['comm_action'] = np.zeros(self.args.nagents, dtype=int)
 
-            if self.args.scenario == 'predator':
-                state = torch.DoubleTensor(state)
-                state = state.unsqueeze(0)
-
-            elif self.args.scenario == 'planning':
-                state = torch.DoubleTensor(state)
-                state = state.view(self.args.nagents,
-                                   self.args.nagents * 3 + 1)
-                uncertainty_map = torch.DoubleTensor(uncertainty_map)
-                uncertainty_map = uncertainty_map.view(
-                    1, 1, self.env.out_shape, self.env.out_shape)
+            state = torch.DoubleTensor(state)
+            state = state.unsqueeze(0)
 
             # recurrence over time
             if self.args.recurrent:
@@ -101,12 +81,8 @@ class Trainer(object):
                     prev_hid = self.policy_net.init_hidden(batch_size=1)
                 
                 x = [state, prev_hid]
-                if self.args.scenario == 'predator':
-                    action_out, value, prev_hid = self.policy_net(
-                        x, None, info)
-                elif self.args.scenario == 'planning':
-                    action_out, value, prev_hid = self.policy_net(
-                        x, uncertainty_map, info)
+                action_out, value, prev_hid = self.policy_net(
+                    x, None, info)
 
                 if (t + 1) % self.args.detach_gap == 0:
                     if self.args.rnn_type == 'LSTM':
@@ -115,29 +91,16 @@ class Trainer(object):
                         prev_hid = prev_hid.detach()
             else:
                 x = state
-                if self.args.scenario == 'predator':
-                    action_out, value = self.policy_net(x, None, info)
-                elif self.args.scenario == 'planning':
-                    action_out, value, prev_hid = self.policy_net(
-                        x, uncertainty_map, info)
+                action_out, value = self.policy_net(x, None, info)
 
-            if self.args.scenario == 'predator':
-                action = select_action(self.args, action_out)
-                action, actual = translate_action(self.args, self.env, action)
+            action = select_action(self.args, action_out)
+            action, actual = translate_action(self.args, self.env, action)
 
-                next_state, reward, done, info, agent_pos, bot_pos = self.env.step(
-                    action, t, False)
-
-            elif self.args.scenario == 'planning':
-                action = select_action(self.args, action_out)
-                action, actual = translate_action(self.args, self.env, action)
-                total_obs, reward, done, info, agent_pos, surveillance_rate = self.env.step(
-                    action[0], t, self.is_centralized)
-                next_state, uncertainty_map = total_obs
+            next_state, reward, done, info, agent_pos, bot_pos = self.env.step(
+                action, t, False)
 
             agent_pos_list.append(np.array(agent_pos))
-            if self.args.scenario == 'predator':
-                bot_pos_list.append(np.array(bot_pos))
+            bot_pos_list.append(np.array(bot_pos))
 
             # store comm_action in info for next step
             if self.args.hard_attn and self.args.commnet:
@@ -179,16 +142,6 @@ class Trainer(object):
             episode.append(trans)
             state = next_state
 
-            if self.args.scenario == 'planning':
-                surveillance_rate_list.append(surveillance_rate)
-                self.bar.update(100*surveillance_rate)
-                #printProgressBar(100*surveillance_rate, 100, prefix = 'Episode ' + str(epoch) + ": ", suffix = 'Surveillance Rate', length = 50)
-                    # for i, item in enumerate(items):
-                    #     # Do stuff...
-                    #     time.sleep(0.1)
-                    #     # Update Progress Bar
-                    #     printProgressBar(i + 1, l, prefix = 'Progress:', suffix = 'Complete', length = 50)
-
             if done:
                 self.bar.finish()
                 #print("surveillance_rate:{}".format(surveillance_rate))
@@ -228,11 +181,8 @@ class Trainer(object):
         if hasattr(self.env, 'get_stat'):
             merge_stat(self.env.get_stat(), stat)
 
-        if self.args.scenario == 'predator':
-            self.env.close()
-            return (episode, stat), agent_pos_list, bot_pos_list
-        elif self.args.scenario == 'planning':
-            return (episode, stat), agent_pos_list, np.mean(surveillance_rate_list)
+        self.env.close()
+        return (episode, stat), agent_pos_list, bot_pos_list
 
     def compute_grad(self, batch):
         stat = dict()
@@ -372,19 +322,9 @@ class Trainer(object):
         self.stats = dict()
         self.stats['num_episodes'] = 0
 
-        if self.args.scenario == 'predator':
-            _, agent_pos, bot_pos = self.get_episode(epoch)
-            self.stats['num_episodes'] += 1
-            return batch, self.stats, agent_pos, bot_pos
-
-        elif self.args.scenario == 'planning':
-            _, agent_pos, mean_surv_rate = self.get_episode(epoch)
-            self.stats['num_episodes'] += 1
-            return batch, self.stats, agent_pos
-        # print(bot_pos_list)
-        # print(agent_pos_list)
-        # ep_agent_pos.append(agent_pos_list)
-        # ep_bot_pos.append(bot_pos_list)
+        _, agent_pos, bot_pos = self.get_episode(epoch)
+        self.stats['num_episodes'] += 1
+        return batch, self.stats, agent_pos, bot_pos
 
     # only used when nprocesses=1
 
@@ -408,12 +348,8 @@ class Trainer(object):
             return stat
 
     def test_batch(self, epoch):
-        if self.args.scenario == 'predator':
-            stat, _, agent_pos, bot_pos = self.test_run_batch(epoch)
-            return stat, agent_pos, bot_pos
-        elif self.args.scenario == 'planning':
-            stat, _, agent_pos = self.test_run_batch(epoch)
-            return stat, agent_pos
+        stat, _, agent_pos, bot_pos = self.test_run_batch(epoch)
+        return stat, agent_pos, bot_pos
 
     def state_dict(self):
         return self.optimizer.state_dict()

@@ -12,9 +12,7 @@ from comm import CommNetMLP
 from utils import *
 from action_utils import parse_action_args
 from trainer import Trainer
-from systematic_results import Reporter
 import pickle
-import glob
 import os
 from json_editor import Json_Editor
 import pprint
@@ -65,20 +63,7 @@ parser.add_argument('--entr', type=float, default=0,
                     help='entropy regularization coeff')
 parser.add_argument('--value_coeff', type=float, default=0.01,
                     help='coeff for value loss term')
-# environment
-# parser.add_argument('--env_name', default="Cartpole",
-#                     help='name of the environment to run')
-# parser.add_argument('--nactions', default='1', type=str,
-#                     help='the number of agent actions (0 for continuous). Use N:M:K for multiple actions')
-# parser.add_argument('--action_scale', default=1.0, type=float,
-#                     help='scale action output from model')
-# other
-# parser.add_argument('--plot', action='store_true', default=False,
-#                     help='plot training progress')
-# parser.add_argument('--plot_env', default='main', type=str,
-#                     help='plot env name')
 
-# Abdullahtan al save kismini
 parser.add_argument('--save', default="True", type=str,
                     help='save the model after training')
 
@@ -96,9 +81,9 @@ parser.add_argument('--commnet', action='store_true', default=False,
                     help="enable commnet model")
 parser.add_argument('--ic3net', action='store_true', default=True,
                     help="enable commnet model")
-parser.add_argument('--nagents', type=int, default=5,
+parser.add_argument('--nagents', type=int, default=2,
                     help="Number of agents (used in multiagent)")
-parser.add_argument('--nbots', type=int, default=0,
+parser.add_argument('--nbots', type=int, default=2,
                     help="Number of bots (used in multiagent)")
 parser.add_argument('--comm_mode', type=str, default='avg',
                     help="Type of mode for communication tensor calculation [avg|sum]")
@@ -125,11 +110,11 @@ parser.add_argument('--share_weights', default=False, action='store_true',
                     help='Share weights for hops')
 # parser.add_argument('--test', default=False, type=bool,
 #                     help='Train or Test')
-parser.add_argument('--mode', default="Train", type=str,
+parser.add_argument('--mode', default="Test", type=str,
                     help='Train or Test')   
-parser.add_argument('--test-model', default="weight/planning.pt", type=str,
+parser.add_argument('--test-model', default="/predator.pt", type=str,
                     help='Model to test')    
-parser.add_argument('--scenario', type=str, default='planning',
+parser.add_argument('--scenario', type=str, default='predator',
                     help='predator or planning ')
 parser.add_argument('--airsim_vis', action='store_true', default=False,
                     help='Visualize in Airsim when testing')
@@ -210,7 +195,7 @@ if args.seed == -1:
     args.seed = np.random.randint(0, 10000)
 torch.manual_seed(args.seed)
 
-print(args.naction_heads)
+#print(args.naction_heads)
 
 if args.commnet:
     print("Policy Net: CommNetMLP")
@@ -233,9 +218,6 @@ for p in policy_net.parameters():
 if args.scenario == 'predator':
     trainer = Trainer(args, policy_net, env, None)
     disp_trainer = Trainer(args, policy_net, env, None)
-elif args.scenario == 'planning':
-    trainer = Trainer(args, policy_net, env, is_centralized)
-    disp_trainer = Trainer(args, policy_net, env, is_centralized)
 
 disp_trainer.display = True
 
@@ -295,7 +277,6 @@ def check_complated(targets,poses):
 
 def run(num_epochs):
     takeoff = False
-    tm = time.localtime()
     
     print('TEST MODE')
     total_pos_list = []
@@ -328,12 +309,6 @@ def run(num_epochs):
                 pickle.dump(agent_pos_list, f)
             with open('./agents_position/bots_positions.pkl', 'wb') as f:
                 pickle.dump(bot_pos_list, f)
-            
-        elif args.scenario == 'planning':
-            _, agent_pos = trainer.test_batch(ep)
-            total_pos_list.append(agent_pos)
-            with open('./agents_position/agents_positions_planner.pkl', 'wb') as f:
-                pickle.dump(total_pos_list, f)
 
         trainer.display = False
 
@@ -429,62 +404,6 @@ def run(num_epochs):
                     i += 1
                 time.sleep(5)
                 
-            elif args.scenario == 'planning':
-                #f_list = []
-                for agent_p in zip(agent_pos):
-
-                    if args.visualization:
-                        info_list = []
-                        curr_agentPos = [[agent_p[0][drn][0], agent_p[0][drn][1], agent_p[0][drn][2]] for drn in range(len(agents_list))]
-                        info_list.append(curr_agentPos)      
-                        info_data = pickle.dumps(info_list)	
-                        clientSocket.send(info_data)
-
-                    agent_control_list=[]
-                    targets=[]
-                    agent_p=agent_p[0]
-
-                    if i == 0:
-                        airsim.wait_key('Press any key to take initial position')
-                        for drn in agents_list:
-                            targets.append([agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2]])
-                            client.moveToPositionAsync(agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2], 6, vehicle_name=f"Drone{drn+1}")
-                            
-                        while  True:
-                            poses=getAllPositions(client,len(agents_list))
-                            statu=check_complated(poses=poses,targets=targets)
-                            if statu==True:
-                                break
-                            time.sleep(.1)
-
-                        airsim.wait_key('Press any key to start')
-                        time.sleep(0.05)
-
-
-                    else:
-                        for drn in agents_list:
-                            targets.append([agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2]])
-                            client.moveToPositionAsync(agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2], 6, vehicle_name=f"Drone{drn+1}")
-                            
-                        while  False:
-                            poses=getAllPositions(client,len(agents_list))
-                            statu=check_complated(poses=poses,targets=targets)
-                            if statu==True:
-                                break
-                            time.sleep(.1)
-                        time.sleep(0.1)
-                    i += 1
-                time.sleep(5)
-                
-                print("\nTEST RESULTS")
-                reporter = Reporter()
-                file_list = glob.glob('./agents_positions_planner/*.pkl')
-                for i, file in enumerate(file_list):
-                    print("{0}/{1} file {2} is loaded! \n".format(i +
-                                                                1, len(file_list), file))
-                    pkl_name = os.path.split(os.path.splitext(file)[0])[1] + '.pkl'
-                    reporter.get_map_coverage(pkl_name)
-                
             s_list = []
             for drn in agents_list:
                 s_list.append(client.takeoffAsync(vehicle_name=f"Drone{drn+1}"))
@@ -555,13 +474,3 @@ if sys.flags.interactive == 0 and args.nprocesses > 1:
     trainer.quit()
     import os
     os._exit(0)
-
-if (args.mode == 'test' or args.mode == 'Test')  and args.scenario == 'planning':
-    print("\nTEST RESULTS")
-    reporter = Reporter()
-    file_list = glob.glob('./agents_positions_planner/*.pkl')
-    for i, file in enumerate(file_list):
-        print("{0}/{1} file {2} is loaded! \n".format(i +
-                                                      1, len(file_list), file))
-        pkl_name = os.path.split(os.path.splitext(file)[0])[1] + '.pkl'
-        reporter.get_map_coverage(pkl_name)

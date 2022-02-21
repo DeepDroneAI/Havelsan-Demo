@@ -5,7 +5,7 @@ from gym.utils import seeding
 import numpy as np
 from os import path
 import itertools
-from quadrotor_dynamics import Drone, Bot
+from quadrotor_dynamics import Quadrotor, Drone, Bot
 from numpy.random import uniform
 from time import sleep
 from collections import deque
@@ -145,7 +145,6 @@ class QuadrotorFormation(gym.Env):
 
             for bot_ind in range(self.n_bots):
                 state[agent_ind][(self.n_agents*3+bot_ind*3):(self.n_agents*3+bot_ind*3)+3] = (self.quadrotors[agent_ind].state - self.bots[bot_ind].state)*self.bots[bot_ind].is_alive
-
         return np.array(state)
 
 
