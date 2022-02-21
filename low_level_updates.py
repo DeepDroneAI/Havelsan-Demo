@@ -8,7 +8,7 @@ class Low_Level_Updates:
         self.updater=Airsim_Updater()
         self.quad1=Quadrotor(state0=self.__pose_to_state(self.updater.initial_poses[0]))
         self.quad2=Quadrotor(state0=self.__pose_to_state(self.updater.initial_poses[1]))
-        self.trajSelect=np.array([3,2,1])
+        self.trajSelect=np.array([3,2,0])
         self.controller="Backstepping_3"
         self.Tf1=1.0
         self.Tf2=1.0
@@ -39,10 +39,16 @@ class Low_Level_Updates:
         return [pose[0],pose[1],pose[2],0,0,0,0,0,0,0,0,0]
 
     def get_poses(self):
-        poses=np.zeros((4,3))
+        poses=np.zeros((2,3))
         for i in range(4):
             poses[i]=self.updater.get_pose(index=i+1)
         return poses
+
+    def get_quad1_pose(self):
+        return [self.quad1.state[0],self.quad1.state[1],self.quad1.state[2]]
+
+    def get_quad2_pose(self):
+        return [self.quad2.state[0],self.quad2.state[1],self.quad2.state[2]]
 
     def set_target_poses(self,poses):
         all_poses=[self.updater.initial_poses[0],self.updater.initial_poses[1],poses[0],poses[1]]
@@ -150,24 +156,24 @@ class Low_Level_Updates:
 
 
     def step(self,actions):
-        target=self.get_poses()
-        target1=target[0]
-        target2=target[1]
+        target1=self.get_quad1_pose()
+        target2=self.get_quad2_pose()
         pose1=target1
         pose2=target2
         target1,target2=self.action_to_target(actions,target1,target2)
-
+        yaw10 = self.quad1.state[5]
+        yaw20 = self.quad2.state[5]
         time_list1 = np.hstack((0., self.Tf1)).astype(float)
         waypoint_list1 = np.vstack((pose1, target1)).astype(float)
-        yaw_list1 = np.hstack((0, 0)).astype(float)
+        yaw_list1 = np.hstack((yaw10, 0.)).astype(float)
 
 
         time_list2 = np.hstack((0., self.Tf2)).astype(float)
         waypoint_list2 = np.vstack((pose2, target2)).astype(float)
-        yaw_list2 = np.hstack((0, 0)).astype(float)
+        yaw_list2 = np.hstack((yaw20, 0.)).astype(float)
 
-        newTraj1 = Trajectory(self.trajSelect, self.quad1.state, time_list1, waypoint_list1, yaw_list1, v_average=4) 
-        newTraj2 = Trajectory(self.trajSelect, self.quad2.state, time_list2, waypoint_list2, yaw_list2, v_average=4) 
+        newTraj1 = Trajectory(self.trajSelect, self.quad1.state, time_list1, waypoint_list1, yaw_list1, v_average=1) 
+        newTraj2 = Trajectory(self.trajSelect, self.quad2.state, time_list2, waypoint_list2, yaw_list2, v_average=1) 
 
         self.Tf1 = newTraj1.t_wps[1]
         self.Tf2 = newTraj2.t_wps[1]
@@ -176,16 +182,17 @@ class Low_Level_Updates:
             t_current=i*self.dtau
             traj1,traj2=self.get_traj(t_current=t_current,newTraj1=newTraj1,newTraj2=newTraj2)
 
-            self.quad1.simulate(self.dtau, traj1,self.Controllers)
-            self.quad2.simulate(self.dtau, traj2,self.Controllers)
+            self.quad1.simulate(self.dtau, traj1,self.controller)
+            self.quad2.simulate(self.dtau, traj2,self.controller)
 
             self.update_pr(traj1=traj1,traj2=traj2)
 
-            poses=self.updater.get_pose()
-            poses[0]=np.array([self.quad1.state[0], self.quad1.state[1], self.quad1.state[2]])
-            poses[1]=np.array([self.quad2.state[0], self.quad2.state[1], self.quad2.state[2]])
+            poses=np.zeros((2,3))
+            poses[0,:]=np.array([self.quad1.state[0], self.quad1.state[1], self.quad1.state[2]])
+            poses[1,:]=np.array([self.quad2.state[0], self.quad2.state[1], self.quad2.state[2]])
 
-            self.updater.set_drone_locs(pose=poses)
+
+            self.updater.update_agent_pose(pose=poses)
 
 
 

@@ -3,26 +3,26 @@
     "Vehicles": {
         "Drone1": {
             "VehicleType": "SimpleFlight",
-            "X": -20,
-            "Y": 20,
+            "X": -30,
+            "Y": 30,
             "Z": 0
         },
         "Drone2": {
             "VehicleType": "SimpleFlight",
-            "X": -20,
-            "Y": 24,
+            "X": -30,
+            "Y": 34,
             "Z": 0
         },
         "Drone3": {
             "VehicleType": "SimpleFlight",
-            "X": -20,
-            "Y": 28,
+            "X": -30,
+            "Y": 38,
             "Z": 0
         },
         "Drone4": {
             "VehicleType": "SimpleFlight",
-            "X": -20,
-            "Y": 32,
+            "X": -30,
+            "Y": 42,
             "Z": 0
         }
     }

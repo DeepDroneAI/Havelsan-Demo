@@ -6,12 +6,12 @@ from low_level_updates import Low_Level_Updates
 
 low_control=Low_Level_Updates()
 
-pose=[[0,0,5],[0,1,5]]
+pose=[[0,0,5],[0,4,5]]
 
 low_control.set_target_poses(pose)
 
 action=[4,4]
+input("Start episode")
 
-
-for i in range(20):
+for i in range(100):
     low_control.step(actions=action)
