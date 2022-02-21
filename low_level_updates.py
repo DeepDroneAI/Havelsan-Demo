@@ -222,6 +222,9 @@ class Low_Level_Updates:
 
             self.update_pr(traj1=traj1,traj2=traj2)
 
+            vel=np.sqrt(pow(self.quad1.state[6],2)+pow(self.quad1.state[7],2)+pow(self.quad1.state[8],2))
+            print("Vel={}".format(vel))
+
             poses=np.zeros((2,3))
             poses[0,:]=np.array([self.quad1.state[0], self.quad1.state[1], self.quad1.state[2]])
             poses[1,:]=np.array([self.quad2.state[0], self.quad2.state[1], self.quad2.state[2]])
