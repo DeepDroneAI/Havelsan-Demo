@@ -13,6 +13,7 @@ class Low_Level_Updates:
         self.Tf1=1.0
         self.Tf2=1.0
         self.dtau = 1e-3
+        self.bot_poses=np.zeros((2,3))
 
         self.xd_ddot_pr1 = 0.
         self.xd_dddot_pr1 = 0.
@@ -52,6 +53,8 @@ class Low_Level_Updates:
 
     def set_target_poses(self,poses):
         all_poses=[self.updater.initial_poses[0],self.updater.initial_poses[1],poses[0],poses[1]]
+        self.bot_poses[0,:]=poses[0]
+        self.bot_poses[1,:]=poses[1]
         self.updater.set_drone_locs(all_poses)
 
     def action_to_target(self,actions,target1,target2):
@@ -153,6 +156,16 @@ class Low_Level_Updates:
             self.x_dot_pr2 = self.quad2.state[6]
             self.y_dot_pr2 = self.quad2.state[7]
             self.z_dot_pr2 = self.quad2.state[8]
+
+    def state_to_rl(self):
+        p1=self.get_quad1_pose()
+        p2=self.get_quad2_pose()
+        p3=self.bot_poses[0]
+        p4=self.bot_poses[1]
+        s1=[p1[0],p1[1],p1[2],p2[0],p2[1],p2[2],p1[0]-p3[0],p1[1]-p3[1],p1[2]-p3[2],p1[0]-p4[0],p1[1]-p4[1],p1[2]-p4[2]]
+        s2=[p2[0],p2[1],p2[2],p1[0],p1[1],p1[2],p2[0]-p3[0],p2[1]-p3[1],p2[2]-p3[2],p2[0]-p4[0],p2[1]-p4[1],p2[2]-p4[2]]
+        
+        return np.array([s1,s2])
 
 
     def step(self,actions):
