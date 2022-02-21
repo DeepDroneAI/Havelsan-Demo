@@ -15,4 +15,6 @@ action=[4,4]
 input("Start episode")
 
 for i in range(100):
-    low_control.step(actions=action)
+    statu=low_control.step(actions=action)
+    if statu:
+        break

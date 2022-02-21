@@ -1,3 +1,4 @@
+from dis import dis
 import numpy as np
 from trajectory import Trajectory
 from quadrotor import *
@@ -14,6 +15,8 @@ class Low_Level_Updates:
         self.Tf2=1.0
         self.dtau = 1e-3
         self.bot_poses=np.zeros((2,3))
+        self.done_statu=False
+        self.bot_statu_gen=np.array([1,1])
 
         self.xd_ddot_pr1 = 0.
         self.xd_dddot_pr1 = 0.
@@ -167,6 +170,25 @@ class Low_Level_Updates:
         
         return np.array([s1,s2])*5
 
+    def check_collition(self):
+        distance=np.zeros(4)
+        poses=self.state_to_rl()/5
+
+        for i in range(2):
+            for j in range(3):
+                distance[i]+=pow(poses[0][6+i*3+j],2)
+                distance[i+2]+=pow(poses[1][6+i*3+j],2)
+
+        for i in range(4):
+            distance[i]=np.sqrt(distance[i])
+
+
+        if distance[0]<1.5 or distance[2]<1.5:
+            self.bot_statu_gen[0]=0
+        if distance[1]<1.5 or distance[3]<1.5:
+            self.bot_statu_gen[1]=0
+
+    
 
     def step(self,actions):
         target1=self.get_quad1_pose()
@@ -203,9 +225,16 @@ class Low_Level_Updates:
             poses=np.zeros((2,3))
             poses[0,:]=np.array([self.quad1.state[0], self.quad1.state[1], self.quad1.state[2]])
             poses[1,:]=np.array([self.quad2.state[0], self.quad2.state[1], self.quad2.state[2]])
+            self.check_collition()
+            if self.bot_statu_gen[0]==0 and self.bot_statu_gen[1]==0:
+                self.done_statu=True
 
+            if self.done_statu==True:
+                return self.done_statu
 
             self.updater.update_agent_pose(pose=poses)
+
+        return self.done_statu
 
 
 
