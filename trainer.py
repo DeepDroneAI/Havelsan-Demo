@@ -6,7 +6,6 @@ from torch import optim
 import torch.nn as nn
 from utils import *
 from action_utils import *
-import time
 import progressbar
 
 

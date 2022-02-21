@@ -3,26 +3,20 @@ import time
 import signal
 import argparse
 import airsim
-# import pprint
-from msgpackrpc.transport.tcp import ClientSocket
 
 import numpy as np
 import torch
-# import visdom
-# import data
 import socket
 from models import *
 from comm import CommNetMLP
 from utils import *
 from action_utils import parse_action_args
 from trainer import Trainer
-from multi_processing import MultiProcessTrainer
 from systematic_results import Reporter
 import pickle
 import glob
 import os
 from json_editor import Json_Editor
-import threading
 import pprint
 
 timeFolderName = str(time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime()))
@@ -236,17 +230,13 @@ if not args.display:
 for p in policy_net.parameters():
     p.data.share_memory_()
 
-if args.nprocesses > 1:
-    trainer = MultiProcessTrainer(args, lambda: Trainer(args, policy_net, env))
-else:
-    if args.scenario == 'predator':
-        trainer = Trainer(args, policy_net, env, None)
-        disp_trainer = Trainer(args, policy_net, env, None)
-    elif args.scenario == 'planning':
-        trainer = Trainer(args, policy_net, env, is_centralized)
-        disp_trainer = Trainer(args, policy_net, env, is_centralized)
+if args.scenario == 'predator':
+    trainer = Trainer(args, policy_net, env, None)
+    disp_trainer = Trainer(args, policy_net, env, None)
+elif args.scenario == 'planning':
+    trainer = Trainer(args, policy_net, env, is_centralized)
+    disp_trainer = Trainer(args, policy_net, env, is_centralized)
 
-#disp_trainer = Trainer(args, policy_net, env)
 disp_trainer.display = True
 
 def disp():
@@ -304,274 +294,212 @@ def check_complated(targets,poses):
 
 
 def run(num_epochs):
-    episode_surv_rates = []
     takeoff = False
     tm = time.localtime()
-
-    if args.mode=='Train' or args.mode=='train':
-        print("TRAIN MODE")
-        for ep in range(num_epochs):
-            epoch_begin_time = time.time()
-            stat = dict()
-            for n in range(args.epoch_size):
-                if n == args.epoch_size - 1 and args.display:
-                    trainer.display = True
-                if args.scenario == "planning":
-                    s, mean_surv_rate = trainer.train_batch(ep)
-                    episode_surv_rates.append(mean_surv_rate)
-                elif args.scenario == "predator":
-                    s = trainer.train_batch(ep)
-                
-                merge_stat(s, stat)
-                trainer.display = False
-
-            epoch_time = time.time() - epoch_begin_time
-            epoch = len(log['epoch'].data) + 1
-            for k, v in log.items():
-                if k == 'epoch':
-                    v.data.append(epoch)
-                else:
-                    if k in stat and v.divide_by is not None and stat[v.divide_by] > 0:
-                        stat[k] = stat[k] / stat[v.divide_by]
-                    v.data.append(stat.get(k, 0))
-
-            np.set_printoptions(precision=2)
-
-            print('\n \tReward: {}\tTime {:.2f}s \n'.format(
-                stat['reward'], epoch_time
-            ))
-
-            if 'enemy_reward' in stat.keys():
-                print('Enemy-Reward: {}'.format(stat['enemy_reward']))
-            if 'add_rate' in stat.keys():
-                print('Add-Rate: {:.2f}'.format(stat['add_rate']))
-            if 'success' in stat.keys():
-                print('Success: {:.2f}'.format(stat['success']))
-            # if 'steps_taken' in stat.keys():
-            #     print('Steps-taken: {:.2f}'.format(stat['steps_taken']))
-            # if 'comm_action' in stat.keys():
-            #     print('Comm-Action: {}'.format(stat['comm_action']))
-            if 'enemy_comm' in stat.keys():
-                print('Enemy-Comm: {}'.format(stat['enemy_comm']))
-
-            if args.scenario == "planning":
-                if np.mean(episode_surv_rates[-args.last_n_episode:]) < args.train_thresh and len(episode_surv_rates) >= args.min_episode :
-                    print ("Mean Surveillance of last 5 episodes: {0:.3}. Too low surveillance rate! Exit!".format(np.mean(episode_surv_rates[-args.last_n_episode:])))
-                    if args.visualization:
-                        env.close()
-                    break
-
-            if args.visualization:
-                env.close()
-
-            if ep % args.save_every == 0 and ep != 0:
-                save(ep, tm)
-                
-    elif args.mode == 'Test' or  args.mode =='test':
-        print('TEST MODE')
-        total_pos_list = []
-        agent_pos_list = []
-        bot_pos_list = []
-
-        agents_list = [agent for agent in range(args.nagents)]
-        if args.scenario == 'predator':
-            bots_list = [bot for bot in range(args.nbots)]
-
-        HOST = '127.0.0.1'
-        PORT = 9090
     
-        # with socket.socket(socket.AF_INET, socket.SO_REUSEADDR) as clientSocket:
-        #     clientSocket.connect((HOST, PORT))
+    print('TEST MODE')
+    total_pos_list = []
+    agent_pos_list = []
+    bot_pos_list = []
 
-        if args.visualization:
-            clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            clientSocket.connect((HOST, PORT))
+    agents_list = [agent for agent in range(args.nagents)]
+    if args.scenario == 'predator':
+        bots_list = [bot for bot in range(args.nbots)]
 
-        for ep in range(args.epoch_size):
-            takeoff = False
+    HOST = '127.0.0.1'
+    PORT = 9090
 
+    # with socket.socket(socket.AF_INET, socket.SO_REUSEADDR) as clientSocket:
+    #     clientSocket.connect((HOST, PORT))
+
+    if args.visualization:
+        clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        clientSocket.connect((HOST, PORT))
+
+    for ep in range(args.epoch_size):
+        takeoff = False
+
+        if args.scenario == 'predator':
+            _, agent_pos, bot_pos = trainer.test_batch(ep)
+
+            agent_pos_list.append(agent_pos)
+            bot_pos_list.append(bot_pos)
+            with open('./agents_position/agents_positions.pkl', 'wb') as f:
+                pickle.dump(agent_pos_list, f)
+            with open('./agents_position/bots_positions.pkl', 'wb') as f:
+                pickle.dump(bot_pos_list, f)
+            
+        elif args.scenario == 'planning':
+            _, agent_pos = trainer.test_batch(ep)
+            total_pos_list.append(agent_pos)
+            with open('./agents_position/agents_positions_planner.pkl', 'wb') as f:
+                pickle.dump(total_pos_list, f)
+
+        trainer.display = False
+
+        if(args.airsim_vis == True):
+            client = airsim.MultirotorClient()
+            client.confirmConnection()
+            initial_poses=find_airsim_initial_poses(args.nagents+args.nbots)
+
+            for drn in agents_list:
+                client.enableApiControl(True, f"Drone{drn+1}")
             if args.scenario == 'predator':
-                _, agent_pos, bot_pos = trainer.test_batch(ep)
+                for bt in bots_list:
+                    client.enableApiControl(True, f"Drone{args.nagents+bt+1}")
 
-                agent_pos_list.append(agent_pos)
-                bot_pos_list.append(bot_pos)
-                with open('./agents_position/agents_positions.pkl', 'wb') as f:
-                    pickle.dump(agent_pos_list, f)
-                with open('./agents_position/bots_positions.pkl', 'wb') as f:
-                    pickle.dump(bot_pos_list, f)
+            for drn in agents_list:  
+                client.armDisarm(True, f"Drone{drn+1}")    
+            if args.scenario == 'predator':
+                for bt in bots_list:
+                    client.armDisarm(True, f"Drone{bt+1}")
+
+            if not takeoff:
+                airsim.wait_key('Press any key to takeoff')
+                f_list = []
+                for drn in agents_list:
+                    f_list.append(client.takeoffAsync(vehicle_name=f"Drone{drn+1}"))
+                if args.scenario == 'predator':
+                    fb_list = []
+                    for bt in bots_list:
+                        fb_list.append(client.takeoffAsync(vehicle_name=f"Drone{args.nagents+bt+1}"))
+                for fx in f_list:
+                    fx.join()
+                if args.scenario == 'predator':
+                    for fb in fb_list:
+                        fb.join()
+                takeoff = True
+
+            i = 0
+            if args.scenario == 'predator':
+                for agent_p, bot_p in zip(agent_pos, bot_pos):
+
+                    if args.visualization:
+                        info_list = []
+
+                        curr_agentPos = [[agent_p[drn][0], agent_p[drn][1], agent_p[drn][2]] for drn in range(len(agents_list))]
+
+                        curr_botPos = [[bot_p[bt][0], bot_p[bt][1], bot_p[bt][2]] for bt in range(len(bots_list))]
+
+                        info_list.append(curr_agentPos)
+                        info_list.append(curr_botPos)
+                        
+                        info_data = pickle.dumps(info_list)
+                        clientSocket.send(info_data)
+                    
+                    targets=[]
+                    if i == 0:
+                        airsim.wait_key('Press any key to take initial position')
+
+                        for drn in agents_list:
+                            targets.append([agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2]])
+                            client.moveToPositionAsync(agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2], 6, vehicle_name=f"Drone{drn+1}")
+                            
+                        for bt in bots_list:
+                            targets.append([bot_p[bt][0]-initial_poses[len(agents_list)+bt][0], bot_p[bt][1]-initial_poses[len(agents_list)+bt][1], bot_p[bt][2]-initial_poses[len(agents_list)+bt][2]])
+                            client.moveToPositionAsync(bot_p[bt][0]-initial_poses[len(agents_list)+bt][0], bot_p[bt][1]-initial_poses[len(agents_list)+bt][1], bot_p[bt][2]-initial_poses[len(agents_list)+bt][2], 6, vehicle_name=f"Drone{args.nagents+bt+1}")
+                        
+                        while  True:
+                            poses=getAllPositions(client,len(agents_list)+len(bots_list))
+                            statu=check_complated(poses=poses,targets=targets)
+                            if statu==True:
+                                break
+                            time.sleep(.1)
+
+
+                        airsim.wait_key('Press any key to start')
+                        time.sleep(0.1)
+
+                    else:
+                        for drn in agents_list:
+                            targets.append([agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2]])
+                            client.moveToPositionAsync(agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2], 5, vehicle_name=f"Drone{drn+1}")
+                            
+                        for bt in bots_list:
+                            targets.append([bot_p[bt][0]-initial_poses[len(agents_list)+bt][0], bot_p[bt][1]-initial_poses[len(agents_list)+bt][1], bot_p[bt][2]-initial_poses[len(agents_list)+bt][2]])
+                            client.moveToPositionAsync(bot_p[bt][0]-initial_poses[len(agents_list)+bt][0], bot_p[bt][1]-initial_poses[len(agents_list)+bt][1], bot_p[bt][2]-initial_poses[len(agents_list)+bt][2], 6, vehicle_name=f"Drone{args.nagents+bt+1}")
+                        
+                        while  False:
+                            poses=getAllPositions(client,len(agents_list)+len(bots_list))
+                            statu=check_complated(poses=poses,targets=targets)
+                            if statu==True:
+                                break
+                            time.sleep(.1)
+                        time.sleep(0.1)
+                    i += 1
+                time.sleep(5)
                 
             elif args.scenario == 'planning':
-                _, agent_pos = trainer.test_batch(ep)
-                total_pos_list.append(agent_pos)
-                with open('./agents_position/agents_positions_planner.pkl', 'wb') as f:
-                    pickle.dump(total_pos_list, f)
+                #f_list = []
+                for agent_p in zip(agent_pos):
 
-            trainer.display = False
+                    if args.visualization:
+                        info_list = []
+                        curr_agentPos = [[agent_p[0][drn][0], agent_p[0][drn][1], agent_p[0][drn][2]] for drn in range(len(agents_list))]
+                        info_list.append(curr_agentPos)      
+                        info_data = pickle.dumps(info_list)	
+                        clientSocket.send(info_data)
 
-            if(args.airsim_vis == True):
-                client = airsim.MultirotorClient()
-                client.confirmConnection()
-                initial_poses=find_airsim_initial_poses(args.nagents+args.nbots)
+                    agent_control_list=[]
+                    targets=[]
+                    agent_p=agent_p[0]
 
-                for drn in agents_list:
-                    client.enableApiControl(True, f"Drone{drn+1}")
-                if args.scenario == 'predator':
-                    for bt in bots_list:
-                        client.enableApiControl(True, f"Drone{args.nagents+bt+1}")
-
-                for drn in agents_list:  
-                    client.armDisarm(True, f"Drone{drn+1}")    
-                if args.scenario == 'predator':
-                    for bt in bots_list:
-                        client.armDisarm(True, f"Drone{bt+1}")
-
-                if not takeoff:
-                    airsim.wait_key('Press any key to takeoff')
-                    f_list = []
-                    for drn in agents_list:
-                        f_list.append(client.takeoffAsync(vehicle_name=f"Drone{drn+1}"))
-                    if args.scenario == 'predator':
-                        fb_list = []
-                        for bt in bots_list:
-                            fb_list.append(client.takeoffAsync(vehicle_name=f"Drone{args.nagents+bt+1}"))
-                    for fx in f_list:
-                        fx.join()
-                    if args.scenario == 'predator':
-                        for fb in fb_list:
-                            fb.join()
-                    takeoff = True
-
-                i = 0
-                if args.scenario == 'predator':
-                    for agent_p, bot_p in zip(agent_pos, bot_pos):
-
-                        if args.visualization:
-                            info_list = []
-
-                            curr_agentPos = [[agent_p[drn][0], agent_p[drn][1], agent_p[drn][2]] for drn in range(len(agents_list))]
-
-                            curr_botPos = [[bot_p[bt][0], bot_p[bt][1], bot_p[bt][2]] for bt in range(len(bots_list))]
-
-                            info_list.append(curr_agentPos)
-                            info_list.append(curr_botPos)
+                    if i == 0:
+                        airsim.wait_key('Press any key to take initial position')
+                        for drn in agents_list:
+                            targets.append([agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2]])
+                            client.moveToPositionAsync(agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2], 6, vehicle_name=f"Drone{drn+1}")
                             
-                            info_data = pickle.dumps(info_list)
-                            clientSocket.send(info_data)
-                        
-                        targets=[]
-                        if i == 0:
-                            airsim.wait_key('Press any key to take initial position')
+                        while  True:
+                            poses=getAllPositions(client,len(agents_list))
+                            statu=check_complated(poses=poses,targets=targets)
+                            if statu==True:
+                                break
+                            time.sleep(.1)
 
-                            for drn in agents_list:
-                                targets.append([agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2]])
-                                client.moveToPositionAsync(agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2], 6, vehicle_name=f"Drone{drn+1}")
-                                
-                            for bt in bots_list:
-                                targets.append([bot_p[bt][0]-initial_poses[len(agents_list)+bt][0], bot_p[bt][1]-initial_poses[len(agents_list)+bt][1], bot_p[bt][2]-initial_poses[len(agents_list)+bt][2]])
-                                client.moveToPositionAsync(bot_p[bt][0]-initial_poses[len(agents_list)+bt][0], bot_p[bt][1]-initial_poses[len(agents_list)+bt][1], bot_p[bt][2]-initial_poses[len(agents_list)+bt][2], 6, vehicle_name=f"Drone{args.nagents+bt+1}")
+                        airsim.wait_key('Press any key to start')
+                        time.sleep(0.05)
+
+
+                    else:
+                        for drn in agents_list:
+                            targets.append([agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2]])
+                            client.moveToPositionAsync(agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2], 6, vehicle_name=f"Drone{drn+1}")
                             
-                            while  True:
-                                poses=getAllPositions(client,len(agents_list)+len(bots_list))
-                                statu=check_complated(poses=poses,targets=targets)
-                                if statu==True:
-                                    break
-                                time.sleep(.1)
+                        while  False:
+                            poses=getAllPositions(client,len(agents_list))
+                            statu=check_complated(poses=poses,targets=targets)
+                            if statu==True:
+                                break
+                            time.sleep(.1)
+                        time.sleep(0.1)
+                    i += 1
+                time.sleep(5)
+                
+                print("\nTEST RESULTS")
+                reporter = Reporter()
+                file_list = glob.glob('./agents_positions_planner/*.pkl')
+                for i, file in enumerate(file_list):
+                    print("{0}/{1} file {2} is loaded! \n".format(i +
+                                                                1, len(file_list), file))
+                    pkl_name = os.path.split(os.path.splitext(file)[0])[1] + '.pkl'
+                    reporter.get_map_coverage(pkl_name)
+                
+            s_list = []
+            for drn in agents_list:
+                s_list.append(client.takeoffAsync(vehicle_name=f"Drone{drn+1}"))
+            if args.scenario == 'predator':
+                b_list = []
+                for bt in bots_list:
+                    b_list.append(client.takeoffAsync(vehicle_name=f"Drone{args.nagents+bt+1}"))
 
+            for sx in s_list:
+                sx.join() 
 
-                            airsim.wait_key('Press any key to start')
-                            time.sleep(0.1)
+            if args.scenario == 'predator':
+                for sbx in b_list:
+                    sbx.join()
 
-                        else:
-                            for drn in agents_list:
-                                targets.append([agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2]])
-                                client.moveToPositionAsync(agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2], 5, vehicle_name=f"Drone{drn+1}")
-                                
-                            for bt in bots_list:
-                                targets.append([bot_p[bt][0]-initial_poses[len(agents_list)+bt][0], bot_p[bt][1]-initial_poses[len(agents_list)+bt][1], bot_p[bt][2]-initial_poses[len(agents_list)+bt][2]])
-                                client.moveToPositionAsync(bot_p[bt][0]-initial_poses[len(agents_list)+bt][0], bot_p[bt][1]-initial_poses[len(agents_list)+bt][1], bot_p[bt][2]-initial_poses[len(agents_list)+bt][2], 6, vehicle_name=f"Drone{args.nagents+bt+1}")
-                            
-                            while  False:
-                                poses=getAllPositions(client,len(agents_list)+len(bots_list))
-                                statu=check_complated(poses=poses,targets=targets)
-                                if statu==True:
-                                    break
-                                time.sleep(.1)
-                            time.sleep(0.1)
-                        i += 1
-                    time.sleep(5)
-                    
-                elif args.scenario == 'planning':
-                    #f_list = []
-                    for agent_p in zip(agent_pos):
-
-                        if args.visualization:
-                            info_list = []
-                            curr_agentPos = [[agent_p[0][drn][0], agent_p[0][drn][1], agent_p[0][drn][2]] for drn in range(len(agents_list))]
-                            info_list.append(curr_agentPos)      
-                            info_data = pickle.dumps(info_list)	
-                            clientSocket.send(info_data)
-
-                        agent_control_list=[]
-                        targets=[]
-                        agent_p=agent_p[0]
-
-                        if i == 0:
-                            airsim.wait_key('Press any key to take initial position')
-                            for drn in agents_list:
-                                targets.append([agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2]])
-                                client.moveToPositionAsync(agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2], 6, vehicle_name=f"Drone{drn+1}")
-                                
-                            while  True:
-                                poses=getAllPositions(client,len(agents_list))
-                                statu=check_complated(poses=poses,targets=targets)
-                                if statu==True:
-                                    break
-                                time.sleep(.1)
-
-                            airsim.wait_key('Press any key to start')
-                            time.sleep(0.05)
-
-
-                        else:
-                            for drn in agents_list:
-                                targets.append([agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2]])
-                                client.moveToPositionAsync(agent_p[drn][0]-initial_poses[drn][0], agent_p[drn][1]-initial_poses[drn][1], agent_p[drn][2]-initial_poses[drn][2], 6, vehicle_name=f"Drone{drn+1}")
-                                
-                            while  False:
-                                poses=getAllPositions(client,len(agents_list))
-                                statu=check_complated(poses=poses,targets=targets)
-                                if statu==True:
-                                    break
-                                time.sleep(.1)
-                            time.sleep(0.1)
-                        i += 1
-                    time.sleep(5)
-                    
-                    print("\nTEST RESULTS")
-                    reporter = Reporter()
-                    file_list = glob.glob('./agents_positions_planner/*.pkl')
-                    for i, file in enumerate(file_list):
-                        print("{0}/{1} file {2} is loaded! \n".format(i +
-                                                                    1, len(file_list), file))
-                        pkl_name = os.path.split(os.path.splitext(file)[0])[1] + '.pkl'
-                        reporter.get_map_coverage(pkl_name)
-                    
-                s_list = []
-                for drn in agents_list:
-                    s_list.append(client.takeoffAsync(vehicle_name=f"Drone{drn+1}"))
-                if args.scenario == 'predator':
-                    b_list = []
-                    for bt in bots_list:
-                        b_list.append(client.takeoffAsync(vehicle_name=f"Drone{args.nagents+bt+1}"))
-
-                for sx in s_list:
-                    sx.join() 
-
-                if args.scenario == 'predator':
-                    for sbx in b_list:
-                        sbx.join()
-    else:
-        print("Wrong Mode!!!")
 
 
 def save(ep, tm):
