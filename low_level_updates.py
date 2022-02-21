@@ -165,7 +165,7 @@ class Low_Level_Updates:
         s1=[p1[0],p1[1],p1[2],p2[0],p2[1],p2[2],p1[0]-p3[0],p1[1]-p3[1],p1[2]-p3[2],p1[0]-p4[0],p1[1]-p4[1],p1[2]-p4[2]]
         s2=[p2[0],p2[1],p2[2],p1[0],p1[1],p1[2],p2[0]-p3[0],p2[1]-p3[1],p2[2]-p3[2],p2[0]-p4[0],p2[1]-p4[1],p2[2]-p4[2]]
         
-        return np.array([s1,s2])
+        return np.array([s1,s2])*5
 
 
     def step(self,actions):
