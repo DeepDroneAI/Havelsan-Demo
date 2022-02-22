@@ -32,7 +32,6 @@ class Trajectory:
         self.y_wps = yaw_list
         self.v_wp  = v_average
 
-        print("wps:{}".format(self.wps))
 
         self.end_reached = 0
 

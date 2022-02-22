@@ -17,7 +17,7 @@ class Low_Level_Updates:
         self.bot_poses=np.zeros((2,3))
         self.done_statu=False
         self.bot_statu_gen=np.array([1,1])
-        self.target_poses=[[0,0,5],[0,4,5]]
+        self.target_poses=np.array([[0,0,10],[0,4,5]])
         self.set_target_poses(self.target_poses)
 
         self.xd_ddot_pr1 = 0.
@@ -236,8 +236,22 @@ class Low_Level_Updates:
             if self.done_statu==True:
                 return self.done_statu
 
-            self.updater.update_agent_pose(pose=poses)
+            
 
+            
+            if self.bot_statu_gen[0]==0:
+                self.target_poses[0]=[0,0,0]
+            if self.bot_statu_gen[1]==0:
+                self.target_poses[1]=[0,0,0]
+
+            all_poses=np.zeros((4,3))
+            all_poses[0,:]=poses[0]
+            all_poses[1,:]=poses[1]
+            all_poses[2,:]=self.target_poses[0]
+            all_poses[3,:]=self.target_poses[1]
+            self.updater.set_drone_locs(all_poses)
+            """self.set_target_poses(self.target_poses)
+            self.updater.update_agent_pose(pose=poses)"""
         return self.done_statu
 
 
