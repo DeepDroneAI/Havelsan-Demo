@@ -8,7 +8,7 @@ low_control=Low_Level_Updates()
 
 print(low_control.state_to_rl())
 
-action=[4,4]
+action=[0,0]
 input("Start episode")
 
 for i in range(100):

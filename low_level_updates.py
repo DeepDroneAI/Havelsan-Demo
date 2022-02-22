@@ -17,7 +17,7 @@ class Low_Level_Updates:
         self.bot_poses=np.zeros((2,3))
         self.done_statu=False
         self.bot_statu_gen=np.array([1,1])
-        self.target_poses=np.array([[0,0,10],[0,4,5]])
+        self.target_poses=np.array([[5,0,0],[5,4,0]])
         self.set_target_poses(self.target_poses)
 
         self.xd_ddot_pr1 = 0.
@@ -60,7 +60,8 @@ class Low_Level_Updates:
         all_poses=[self.updater.initial_poses[0],self.updater.initial_poses[1],poses[0],poses[1]]
         self.bot_poses[0,:]=poses[0]
         self.bot_poses[1,:]=poses[1]
-        self.updater.set_drone_locs(all_poses)
+        att=np.zeros((4,3))
+        self.updater.set_drone_locs(all_poses,att)
 
     def action_to_target(self,actions,target1,target2):
         if actions[0]==0:
@@ -167,8 +168,8 @@ class Low_Level_Updates:
         p2=self.get_quad2_pose()
         p3=self.bot_poses[0]
         p4=self.bot_poses[1]
-        s1=[p1[0],p1[1],p1[2],p2[0],p2[1],p2[2],p1[0]-p3[0],p1[1]-p3[1],p1[2]-p3[2],p1[0]-p4[0],p1[1]-p4[1],p1[2]-p4[2]]
-        s2=[p1[0],p1[1],p1[2],0,0,0,p2[0]-p3[0],p2[1]-p3[1],p2[2]-p3[2],p2[0]-p4[0],p2[1]-p4[1],p2[2]-p4[2]]
+        s1=[p1[0],p1[1],p1[2]-6/5,p2[0],p2[1],p2[2],p1[0]-p3[0],p1[1]-p3[1],p1[2]-p3[2],p1[0]-p4[0],p1[1]-p4[1],p1[2]-p4[2]]
+        s2=[p1[0],p1[1],p1[2]-6/5,0,0,0,p2[0]-p3[0],p2[1]-p3[1],p2[2]-p3[2],p2[0]-p4[0],p2[1]-p4[1],p2[2]-p4[2]]
         
         return np.array([s1,s2])*5
 
@@ -227,8 +228,11 @@ class Low_Level_Updates:
             vel=np.sqrt(pow(self.quad1.state[6],2)+pow(self.quad1.state[7],2)+pow(self.quad1.state[8],2))
 
             poses=np.zeros((2,3))
+            att=np.zeros((4,3))
             poses[0,:]=np.array([self.quad1.state[0], self.quad1.state[1], self.quad1.state[2]])
             poses[1,:]=np.array([self.quad2.state[0], self.quad2.state[1], self.quad2.state[2]])
+            att[0,:]=np.array([self.quad1.state[3], -self.quad1.state[4], self.quad1.state[5]])
+            att[1,:]=np.array([self.quad2.state[3], -self.quad2.state[4], self.quad2.state[5]])
             self.check_collition()
             if self.bot_statu_gen[0]==0 and self.bot_statu_gen[1]==0:
                 self.done_statu=True
@@ -249,7 +253,7 @@ class Low_Level_Updates:
             all_poses[1,:]=poses[1]
             all_poses[2,:]=self.target_poses[0]
             all_poses[3,:]=self.target_poses[1]
-            self.updater.set_drone_locs(all_poses)
+            self.updater.set_drone_locs(all_poses,att)
             """self.set_target_poses(self.target_poses)
             self.updater.update_agent_pose(pose=poses)"""
         return self.done_statu

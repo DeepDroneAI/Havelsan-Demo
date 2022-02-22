@@ -20,10 +20,10 @@ class Airsim_Updater:
         for i in range(4):
             self.client.armDisarm(True, f"Drone{i+1}")
 
-    def set_drone_locs(self,pose):
+    def set_drone_locs(self,pose,att):
         pose=self.__convert_locs(pose)
         for i in range(4):
-            quad_pose=[pose[i][0],pose[i][1],-pose[i][2],0,0,0]
+            quad_pose=[pose[i][0],pose[i][1],-pose[i][2],att[i][0],att[i][1],att[i][2]]
             self.client.simSetVehiclePose(QuadPose(quad_pose), True,f"Drone{i+1}")
 
     def update_agent_pose(self,pose):
