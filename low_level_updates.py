@@ -1,4 +1,5 @@
 from dis import dis
+import re
 import numpy as np
 from trajectory import Trajectory
 from quadrotor import *
@@ -39,10 +40,19 @@ class Low_Level_Updates:
         self.x_dot_pr2 = 0.
         self.y_dot_pr2 = 0.
         self.z_dot_pr2 = 0.
+        self.crash_statu=False
         
 
     def __pose_to_state(self,pose):
         return [pose[0],pose[1],pose[2],0,0,0,0,0,0,0,0,0]
+
+    def check_crash(self,pose1,pose2):
+        err_sum=0
+        for i in range(3):
+            err_sum+=pow(pose1[i]-pose2[i],2)
+
+        if np.sqrt(err_sum)<1.5:
+            self.crash_statu=True
 
     def get_poses(self):
         poses=np.zeros((2,3))
@@ -234,6 +244,7 @@ class Low_Level_Updates:
             att[0,:]=np.array([self.quad1.state[3], -self.quad1.state[4], self.quad1.state[5]])
             att[1,:]=np.array([self.quad2.state[3], -self.quad2.state[4], self.quad2.state[5]])
             self.check_collition()
+            
             if self.bot_statu_gen[0]==0 and self.bot_statu_gen[1]==0:
                 self.done_statu=True
 
