@@ -7,6 +7,7 @@ import torch.nn as nn
 from utils import *
 from action_utils import *
 import progressbar
+from low_level_updates import Low_Level_Updates
 
 
 Transition = namedtuple('Transition', ('state', 'action', 'action_out', 'value', 'episode_mask', 'episode_mini_mask', 'next_state',
@@ -54,19 +55,19 @@ class Trainer(object):
         self.bar.start()
         self.bar.finish()
         #self.bar.start()
+        self.low_control = Low_Level_Updates()
 
     def get_episode(self, epoch):
         episode = []
         stat = dict()
         info = dict()
 
-
-        state = self.env.reset()   
+        #state = self.env.reset()  
+        
+        state = self.low_control.state_to_rl()
 
         prev_hid = torch.zeros(1, self.args.nagents, self.args.hid_size)
 
-        agent_pos_list = []
-        bot_pos_list = []
         for t in range(self.args.max_steps):
             misc = dict()
             if t == 0 and self.args.hard_attn and self.args.commnet:
@@ -96,11 +97,16 @@ class Trainer(object):
             action = select_action(self.args, action_out)
             action, actual = translate_action(self.args, self.env, action)
 
-            next_state, reward, done, info, agent_pos, bot_pos = self.env.step(
-                action, t, False)
-
-            agent_pos_list.append(np.array(agent_pos))
-            bot_pos_list.append(np.array(bot_pos))
+            #next_state, reward, done, info, agent_pos, bot_pos = self.env.step(state, 
+            #    action, t, False)
+            info = {}
+            reward = np.ones(2) * (-2)
+            print(action[0].tolist())
+            print("-")
+            done = self.low_control.step(actions=[0,0])
+            next_state=self.low_control.state_to_rl()
+            print("+")
+            print(done)
 
             # store comm_action in info for next step
             if self.args.hard_attn and self.args.commnet:
@@ -150,19 +156,19 @@ class Trainer(object):
         stat['num_steps'] = t + 1
         stat['steps_taken'] = stat['num_steps']
 
-        if self.args.scenario == "predator":
-            n_agent = len(bot_pos_list[-1])
-            score = 0
-            for idx in range(n_agent):
-                if bot_pos_list[-1][idx][2] == 0.:
-                    score += 1.0
+        # if self.args.scenario == "predator":
+        #     n_agent = len(bot_pos_list[-1])
+        #     score = 0
+        #     for idx in range(n_agent):
+        #         if bot_pos_list[-1][idx][2] == 0.:
+        #             score += 1.0
             
-            total_score = score/n_agent*100.0
-            if self.print_count == epoch:
-                print("EPISODE:",epoch,"SUCCESS RATE = %",total_score)
-                self.print_count += 1
-            else:
-                pass
+        #     total_score = score/n_agent*100.0
+        #     if self.print_count == epoch:
+        #         print("EPISODE:",epoch,"SUCCESS RATE = %",total_score)
+        #         self.print_count += 1
+        #     else:
+        #         pass
 
         if hasattr(self.env, 'reward_terminal'):
             reward = self.env.reward_terminal()
@@ -182,7 +188,7 @@ class Trainer(object):
             merge_stat(self.env.get_stat(), stat)
 
         self.env.close()
-        return (episode, stat), agent_pos_list, bot_pos_list
+        return (episode, stat)
 
     def compute_grad(self, batch):
         stat = dict()
