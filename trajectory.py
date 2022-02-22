@@ -21,6 +21,8 @@ class Trajectory:
 
     def __init__(self, trajSelect, state, time_list, waypoint_list, yaw_list, v_average=1.5):
 
+
+
         self.xyzType = trajSelect[0]
         self.yawType = trajSelect[1]
         self.averVel = trajSelect[2]
@@ -29,6 +31,8 @@ class Trajectory:
         self.wps   = waypoint_list
         self.y_wps = yaw_list
         self.v_wp  = v_average
+
+        print("wps:{}".format(self.wps))
 
         self.end_reached = 0
 

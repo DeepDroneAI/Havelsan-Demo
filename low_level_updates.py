@@ -9,7 +9,7 @@ class Low_Level_Updates:
         self.updater=Airsim_Updater()
         self.quad1=Quadrotor(state0=self.__pose_to_state(self.updater.initial_poses[0]))
         self.quad2=Quadrotor(state0=self.__pose_to_state(self.updater.initial_poses[1]))
-        self.trajSelect=np.array([3,2,0])
+        self.trajSelect=np.array([3,2,1])
         self.controller="Backstepping_3"
         self.Tf1=1.0
         self.Tf2=1.0
@@ -17,6 +17,8 @@ class Low_Level_Updates:
         self.bot_poses=np.zeros((2,3))
         self.done_statu=False
         self.bot_statu_gen=np.array([1,1])
+        self.target_poses=[[0,0,5],[0,4,5]]
+        self.set_target_poses(self.target_poses)
 
         self.xd_ddot_pr1 = 0.
         self.xd_dddot_pr1 = 0.
@@ -199,16 +201,16 @@ class Low_Level_Updates:
         yaw10 = self.quad1.state[5]
         yaw20 = self.quad2.state[5]
         time_list1 = np.hstack((0., self.Tf1)).astype(float)
-        waypoint_list1 = np.vstack((pose1, target1)).astype(float)
+        waypoint_list1 = np.array([self.get_quad1_pose(),target1])
         yaw_list1 = np.hstack((yaw10, 0.)).astype(float)
 
 
         time_list2 = np.hstack((0., self.Tf2)).astype(float)
-        waypoint_list2 = np.vstack((pose2, target2)).astype(float)
+        waypoint_list2 = np.array([self.get_quad2_pose(), target2])
         yaw_list2 = np.hstack((yaw20, 0.)).astype(float)
 
-        newTraj1 = Trajectory(self.trajSelect, self.quad1.state, time_list1, waypoint_list1, yaw_list1, v_average=1) 
-        newTraj2 = Trajectory(self.trajSelect, self.quad2.state, time_list2, waypoint_list2, yaw_list2, v_average=1) 
+        newTraj1 = Trajectory(self.trajSelect, self.quad1.state, time_list1, waypoint_list1, yaw_list1, v_average=5) 
+        newTraj2 = Trajectory(self.trajSelect, self.quad2.state, time_list2, waypoint_list2, yaw_list2, v_average=5) 
 
         self.Tf1 = newTraj1.t_wps[1]
         self.Tf2 = newTraj2.t_wps[1]
@@ -223,7 +225,6 @@ class Low_Level_Updates:
             self.update_pr(traj1=traj1,traj2=traj2)
 
             vel=np.sqrt(pow(self.quad1.state[6],2)+pow(self.quad1.state[7],2)+pow(self.quad1.state[8],2))
-            print("Vel={}".format(vel))
 
             poses=np.zeros((2,3))
             poses[0,:]=np.array([self.quad1.state[0], self.quad1.state[1], self.quad1.state[2]])
