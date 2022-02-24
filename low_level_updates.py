@@ -4,10 +4,17 @@ import numpy as np
 from trajectory import Trajectory
 from quadrotor import *
 from airsim_update import Airsim_Updater
+from sensor_msgs.msg import Imu 
+from imuTypes import *
+import rospy 
 
 class Low_Level_Updates:
     def __init__(self):
         self.updater=Airsim_Updater()
+        rospy.init_node('imu_messages')
+        self.imu = Imu()
+        self.imuClass = IMU()
+        self.imuPub = rospy.Publisher('imu_messages', Imu, queue_size=300)
         self.quad1=Quadrotor(state0=self.__pose_to_state(self.updater.initial_poses[0]))
         self.quad2=Quadrotor(state0=self.__pose_to_state(self.updater.initial_poses[1]))
         self.trajSelect=np.array([3,2,1])
@@ -245,36 +252,52 @@ class Low_Level_Updates:
             att[1,:]=np.array([self.quad2.state[3], -self.quad2.state[4], self.quad2.state[5]])
             self.check_collition()
             
-            if self.bot_statu_gen[0]==0 and self.bot_statu_gen[1]==0:
-                self.done_statu=True
+            # IMU UPDATES
+            self.imu.angular_velocity.x = self.quad1.state[6]
+            self.imu.angular_velocity.y = self.quad1.state[7]
+            self.imu.angular_velocity.z = self.quad1.state[8]
+            self.imu.linear_acceleration.z = self.quad1.state[9]
+            self.imu.linear_acceleration.y = self.quad1.state[10]
+            self.imu.linear_acceleration.z = self.quad1.state[11]
+            self.imu.header.stamp = rospy.Time.now()
+            self.imuClass.angularVelocity.x = self.imu.angular_velocity.x
+            self.imuClass.angularVelocity.y = self.imu.angular_velocity.y
+            self.imuClass.angularVelocity.z = self.imu.angular_velocity.z
+            self.imuClass.linearAcceleration.x = self.imu.linear_acceleration.x
+            self.imuClass.linearAcceleration.y = self.imu.linear_acceleration.y
+            self.imuClass.linearAcceleration.z = self.imu.linear_acceleration.z
+            # IMU PUBLISH
+            self.imuPublish(self.imu)
 
-            if self.done_statu==True:
+            # PRINT IMU STATES
+            self.printIMUValues()
+
+            if self.bot_statu_gen[0] == 0 and self.bot_statu_gen[1] == 0:
+                self.done_statu = True
+
+            if self.done_statu == True:
                 return self.done_statu
+            if self.bot_statu_gen[0] == 0:
+                self.target_poses[0] = [0, 0, 0]
+            if self.bot_statu_gen[1] == 0:
+                self.target_poses[1] = [0, 0, 0]
 
-            
-
-            
-            if self.bot_statu_gen[0]==0:
-                self.target_poses[0]=[0,0,0]
-            if self.bot_statu_gen[1]==0:
-                self.target_poses[1]=[0,0,0]
-
-            all_poses=np.zeros((4,3))
-            all_poses[0,:]=poses[0]
-            all_poses[1,:]=poses[1]
-            all_poses[2,:]=self.target_poses[0]
-            all_poses[3,:]=self.target_poses[1]
-            self.updater.set_drone_locs(all_poses,att)
+            all_poses = np.zeros((4, 3))
+            all_poses[0, :] = poses[0]
+            all_poses[1, :] = poses[1]
+            all_poses[2, :] = self.target_poses[0]
+            all_poses[3, :] = self.target_poses[1]
+            self.updater.set_drone_locs(all_poses, att)
             """self.set_target_poses(self.target_poses)
             self.updater.update_agent_pose(pose=poses)"""
         return self.done_statu
 
+    def imuPublish(self, imuInformation):
+        self.imuPub.publish(imuInformation)
 
-
-
-
-
+    def printIMUValues(self):
+        print(self.imuClass.angularVelocity.toString())
+        print(self.imuClass.linearAcceleration.toString())
+        print(self.imuClass.orientation.toString())
+        print(self.imuClass.header.toString())
         
-
-
-
