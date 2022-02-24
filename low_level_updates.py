@@ -256,7 +256,7 @@ class Low_Level_Updates:
             self.imu.angular_velocity.x = self.quad1.state[6]
             self.imu.angular_velocity.y = self.quad1.state[7]
             self.imu.angular_velocity.z = self.quad1.state[8]
-            self.imu.linear_acceleration.z = self.quad1.state[9]
+            self.imu.linear_acceleration.x = self.quad1.state[9]
             self.imu.linear_acceleration.y = self.quad1.state[10]
             self.imu.linear_acceleration.z = self.quad1.state[11]
             self.imu.header.stamp = rospy.Time.now()
