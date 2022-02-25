@@ -5,6 +5,7 @@ from trajectory import Trajectory
 from quadrotor import *
 from airsim_update import Airsim_Updater
 from sensor_msgs.msg import Imu 
+from nav_msgs.msg import Odometry
 from imuTypes import *
 import rospy 
 
@@ -16,13 +17,15 @@ class Low_Level_Updates:
         self.odom1, self.odom2 = Odometry(), Odometry()
         self.odomSubscriber1 = '/odom_node1'
         self.odomSubscriber2 = '/odom_node2'
-        rospy.Subscriber(self.odomSubscriber1, Odometry, self.odom1Callback)
-        rospy.Subscriber(self.odomSubscriber2, Odometry, self.odom2Callback)
-        self.odomPub1 = rospy.Publisher('odom_agent1', Odometry, queue_size=300)
-        self.odomPub2 = rospy.Publisher('odom_agent2', Odometry, queue_size=300)
+        self.imuSubscriber1 = '/imu_uav1'
+        self.imuSubscriber2 = '/imu_uav2'
         self.imuClass = IMU()
         self.imuPub1 = rospy.Publisher('imu_uav1', Imu, queue_size=300)
         self.imuPub2 = rospy.Publisher('imu_uav2', Imu, queue_size=300)
+        rospy.Subscriber(self.odomSubscriber1, Odometry, self.odom1Callback)
+        rospy.Subscriber(self.odomSubscriber2, Odometry, self.odom2Callback)
+        rospy.Subscriber(self.imuSubscriber1, Imu, self.imu1Callback)
+        rospy.Subscriber(self.imuSubscriber2, Imu, self.imu2Callback)
         self.quad1 = Quadrotor(state0=self.__pose_to_state(self.updater.initial_poses[0]))
         self.quad2 = Quadrotor(state0=self.__pose_to_state(self.updater.initial_poses[1]))
         self.trajSelect = np.array([3, 2, 1])
@@ -56,13 +59,19 @@ class Low_Level_Updates:
         self.y_dot_pr2 = 0.
         self.z_dot_pr2 = 0.
         self.crash_statu = False
-        
+
     def odom1Callback(self, data):
         self.odom1 = data
 
     def odom2Callback(self, data):
         self.odom2 = data
-        
+
+    def imu1Callback(self, data):
+        self.imu1 = data
+
+    def imu2Callback(self, data):
+        self.imu2 = data
+
     def __pose_to_state(self, pose):
         return [pose[0], pose[1], pose[2], 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
@@ -260,29 +269,26 @@ class Low_Level_Updates:
             att[1, :] = np.array([self.quad2.state[3], -self.quad2.state[4], self.quad2.state[5]])
             self.check_collition()
 
+            imu1, imu2 = Imu(), Imu()
             # IMU UPDATES
-            self.imu1.angular_velocity.x = self.quad1.state[6]
-            self.imu1.angular_velocity.y = self.quad1.state[7]
-            self.imu1.angular_velocity.z = self.quad1.state[8]
-            self.imu1.linear_acceleration.x = self.quad1.state[9]
-            self.imu1.linear_acceleration.y = self.quad1.state[10]
-            self.imu1.linear_acceleration.z = self.quad1.state[11]
-            self.imu1.header.stamp = rospy.Time.now()
-            self.imu2.angular_velocity.x = self.quad2.state[6]
-            self.imu2.angular_velocity.y = self.quad2.state[7]
-            self.imu2.angular_velocity.z = self.quad2.state[8]
-            self.imu2.linear_acceleration.x = self.quad2.state[9]
-            self.imu2.linear_acceleration.y = self.quad2.state[10]
-            self.imu2.linear_acceleration.z = self.quad2.state[11]
-            self.imu2.header.stamp = rospy.Time.now()
+            imu1.angular_velocity.x = self.quad1.state[6]
+            imu1.angular_velocity.y = self.quad1.state[7]
+            imu1.angular_velocity.z = self.quad1.state[8]
+            imu1.linear_acceleration.x = self.quad1.state[9]
+            imu1.linear_acceleration.y = self.quad1.state[10]
+            imu1.linear_acceleration.z = self.quad1.state[11]
+            imu1.header.stamp = rospy.Time.now()
+            imu2.angular_velocity.x = self.quad2.state[6]
+            imu2.angular_velocity.y = self.quad2.state[7]
+            imu2.angular_velocity.z = self.quad2.state[8]
+            imu2.linear_acceleration.x = self.quad2.state[9]
+            imu2.linear_acceleration.y = self.quad2.state[10]
+            imu2.linear_acceleration.z = self.quad2.state[11]
+            imu2.header.stamp = rospy.Time.now()
             # IMU PUBLISH
-            self.imu1Publish(self.imu1)
-            self.imu2Publish(self.imu2)
-            
-            # ODOM DATA PUBLISH
-            self.odomPub1.publish(self.odom1)
-            self.odomPub2.publish(self.odom2)
-            
+            self.imu1Publish(imu1)
+            self.imu2Publish(imu2)
+
             if self.bot_statu_gen[0] == 0 and self.bot_statu_gen[1] == 0:
                 self.done_statu = True
 
@@ -305,7 +311,7 @@ class Low_Level_Updates:
 
     def imu1Publish(self, imuInformation):
         self.imuPub1.publish(imuInformation)
-        
+
     def imu2Publish(self, imuInformation):
         self.imuPub2.publish(imuInformation)
 
@@ -314,5 +320,4 @@ class Low_Level_Updates:
         print(self.imuClass.linearAcceleration.toString())
         print(self.imuClass.orientation.toString())
         print(self.imuClass.header.toString())
-        
         
