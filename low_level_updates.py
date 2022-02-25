@@ -13,6 +13,13 @@ class Low_Level_Updates:
         self.updater = Airsim_Updater()
         rospy.init_node('imu_messages')
         self.imu1, self.imu2 = Imu(), Imu()
+        self.odom1, self.odom2 = Odometry(), Odometry()
+        self.odomSubscriber1 = '/odom_node1'
+        self.odomSubscriber2 = '/odom_node2'
+        rospy.Subscriber(self.odomSubscriber1, Odometry, self.odom1Callback)
+        rospy.Subscriber(self.odomSubscriber2, Odometry, self.odom2Callback)
+        self.odomPub1 = rospy.Publisher('odom_agent1', Odometry, queue_size=300)
+        self.odomPub2 = rospy.Publisher('odom_agent2', Odometry, queue_size=300)
         self.imuClass = IMU()
         self.imuPub1 = rospy.Publisher('imu_uav1', Imu, queue_size=300)
         self.imuPub2 = rospy.Publisher('imu_uav2', Imu, queue_size=300)
@@ -49,7 +56,13 @@ class Low_Level_Updates:
         self.y_dot_pr2 = 0.
         self.z_dot_pr2 = 0.
         self.crash_statu = False
+        
+    def odom1Callback(self, data):
+        self.odom1 = data
 
+    def odom2Callback(self, data):
+        self.odom2 = data
+        
     def __pose_to_state(self, pose):
         return [pose[0], pose[1], pose[2], 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
@@ -265,7 +278,11 @@ class Low_Level_Updates:
             # IMU PUBLISH
             self.imu1Publish(self.imu1)
             self.imu2Publish(self.imu2)
-
+            
+            # ODOM DATA PUBLISH
+            self.odomPub1.publish(self.odom1)
+            self.odomPub2.publish(self.odom2)
+            
             if self.bot_statu_gen[0] == 0 and self.bot_statu_gen[1] == 0:
                 self.done_statu = True
 
