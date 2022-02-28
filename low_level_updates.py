@@ -8,6 +8,7 @@ from sensor_msgs.msg import Imu
 from nav_msgs.msg import Odometry
 from imuTypes import *
 import rospy 
+import time
 
 class Low_Level_Updates:
     def __init__(self):
@@ -15,13 +16,33 @@ class Low_Level_Updates:
         rospy.init_node('imu_messages')
         self.imu1, self.imu2 = Imu(), Imu()
         self.odom1, self.odom2 = Odometry(), Odometry()
-        self.odomSubscriber1 = '/odom_node1'
-        self.odomSubscriber2 = '/odom_node2'
+        self.odomSubscriber1 = 'vins_estimator1/odometry'
+        self.odomSubscriber2 = 'vins_estimator2/odometry'
         self.imuSubscriber1 = '/imu_uav1'
         self.imuSubscriber2 = '/imu_uav2'
         self.imuClass = IMU()
         self.imuPub1 = rospy.Publisher('imu_uav1', Imu, queue_size=300)
         self.imuPub2 = rospy.Publisher('imu_uav2', Imu, queue_size=300)
+        imu1, imu2 = Imu(), Imu()
+        # IMU UPDATES
+        imu1.angular_velocity.x = 0
+        imu1.angular_velocity.y = 0
+        imu1.angular_velocity.z = 0
+        imu1.linear_acceleration.x = 0
+        imu1.linear_acceleration.y = 0
+        imu1.linear_acceleration.z = 0
+        imu1.header.stamp = rospy.Time.now()
+        imu2.angular_velocity.x = 0
+        imu2.angular_velocity.y = 0
+        imu2.angular_velocity.z = 0
+        imu2.linear_acceleration.x = 0
+        imu2.linear_acceleration.y = 0
+        imu2.linear_acceleration.z = 0
+        imu2.header.stamp = rospy.Time.now()
+            # IMU PUBLISH
+        self.imu1Publish(imu1)
+        self.imu2Publish(imu2)
+        input("Run subscribers")
         rospy.Subscriber(self.odomSubscriber1, Odometry, self.odom1Callback)
         rospy.Subscriber(self.odomSubscriber2, Odometry, self.odom2Callback)
         rospy.Subscriber(self.imuSubscriber1, Imu, self.imu1Callback)
@@ -38,6 +59,13 @@ class Low_Level_Updates:
         self.bot_statu_gen = np.array([1, 1])
         self.target_poses = np.array([[5, 0, 0], [5, 4, 0]])
         self.set_target_poses(self.target_poses)
+
+        self.prev_vel1=np.zeros(3)
+        self.prev_vel2=np.zeros(3)
+
+        self.vel1=np.zeros(3)
+        self.vel2=np.zeros(3)
+
 
         self.xd_ddot_pr1 = 0.
         self.xd_dddot_pr1 = 0.
@@ -71,6 +99,74 @@ class Low_Level_Updates:
 
     def imu2Callback(self, data):
         self.imu2 = data
+
+    def euler_from_quaternion(self,x, y, z, w):
+        """
+        Convert a quaternion into euler angles (roll, pitch, yaw)
+        roll is rotation around x in radians (counterclockwise)
+        pitch is rotation around y in radians (counterclockwise)
+        yaw is rotation around z in radians (counterclockwise)
+        """
+        t0 = +2.0 * (w * x + y * z)
+        t1 = +1.0 - 2.0 * (x * x + y * y)
+        roll_x = math.atan2(t0, t1)
+     
+        t2 = +2.0 * (w * y - z * x)
+        t2 = +1.0 if t2 > +1.0 else t2
+        t2 = -1.0 if t2 < -1.0 else t2
+        pitch_y = math.asin(t2)
+     
+        t3 = +2.0 * (w * z + x * y)
+        t4 = +1.0 - 2.0 * (y * y + z * z)
+        yaw_z = math.atan2(t3, t4)
+     
+        return roll_x, pitch_y, yaw_z # in radian    
+
+    def get_quad1_state(self):
+        x,y,z=[self.odom1.pose.pose.position.x,self.odom1.pose.pose.position.y,self.odom1.pose.pose.position.z]
+        qx=self.odom1.pose.pose.orientation.x
+        qy=self.odom1.pose.pose.orientation.y
+        qz=self.odom1.pose.pose.orientation.z
+        qw=self.odom1.pose.pose.orientation.w
+        roll,pitch,yaw=self.euler_from_quaternion(qx,qy,qz,qw)
+
+        ax=self.imu1.linear_acceleration.x
+        ay=self.imu1.linear_acceleration.y
+        az=self.imu1.linear_acceleration.z
+
+        acc=np.array([ax,ay,az])
+
+        self.vel1+=acc*self.dtau
+
+
+        p=self.imu1.angular_velocity.x
+        q=self.imu1.angular_velocity.y
+        r=self.imu1.angular_velocity.z
+
+        return [x,y,z,roll,pitch,yaw,p,q,r,self.vel1[0],self.vel1[1],self.vel1[2]]
+    def get_quad2_state(self):
+        x,y,z=[self.odom2.pose.pose.position.x,self.odom2.pose.pose.position.y,self.odom2.pose.pose.position.z]
+        qx=self.odom2.pose.pose.orientation.x
+        qy=self.odom2.pose.pose.orientation.y
+        qz=self.odom2.pose.pose.orientation.z
+        qw=self.odom2.pose.pose.orientation.w
+        roll,pitch,yaw=self.euler_from_quaternion(qx,qy,qz,qw)
+
+        ax=self.imu2.linear_acceleration.x
+        ay=self.imu2.linear_acceleration.y
+        az=self.imu2.linear_acceleration.z
+
+        acc=np.array([ax,ay,az])
+
+        self.vel2+=acc*self.dtau
+
+
+        p=self.imu2.angular_velocity.x
+        q=self.imu2.angular_velocity.y
+        r=self.imu2.angular_velocity.z
+
+        return [x,y,z,roll,pitch,yaw,p,q,r,self.vel2[0],self.vel2[1],self.vel2[2]]
+
 
     def __pose_to_state(self, pose):
         return [pose[0], pose[1], pose[2], 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -250,12 +346,19 @@ class Low_Level_Updates:
         self.Tf1 = newTraj1.t_wps[1]
         self.Tf2 = newTraj2.t_wps[1]
 
+
+
         for i in range(100):
+            time.sleep(.3)
+
             t_current = i * self.dtau
             traj1, traj2 = self.get_traj(t_current=t_current, newTraj1=newTraj1, newTraj2=newTraj2)
 
             self.quad1.simulate(self.dtau, traj1, self.controller)
             self.quad2.simulate(self.dtau, traj2, self.controller)
+
+            print("Quad1 state:{}".format(self.get_quad1_state()))
+            print("Quad2 state:{}".format(self.get_quad2_state()))
 
             self.update_pr(traj1=traj1, traj2=traj2)
 
@@ -269,21 +372,30 @@ class Low_Level_Updates:
             att[1, :] = np.array([self.quad2.state[3], -self.quad2.state[4], self.quad2.state[5]])
             self.check_collition()
 
+            vel_cur1=np.array(self.quad1.state[6:9])
+            vel_cur2=np.array(self.quad2.state[6:9])
+
+            acc1=(vel_cur1-self.prev_vel1)/self.dtau
+            acc2=(vel_cur2-self.prev_vel2)/self.dtau
+
+            self.prev_vel1=vel_cur1
+            self.prev_vel2=vel_cur2
+
             imu1, imu2 = Imu(), Imu()
             # IMU UPDATES
-            imu1.angular_velocity.x = self.quad1.state[6]
-            imu1.angular_velocity.y = self.quad1.state[7]
-            imu1.angular_velocity.z = self.quad1.state[8]
-            imu1.linear_acceleration.x = self.quad1.state[9]
-            imu1.linear_acceleration.y = self.quad1.state[10]
-            imu1.linear_acceleration.z = self.quad1.state[11]
+            imu1.angular_velocity.x = self.quad1.state[9]
+            imu1.angular_velocity.y = self.quad1.state[10]
+            imu1.angular_velocity.z = self.quad1.state[11]
+            imu1.linear_acceleration.x = acc1[0]
+            imu1.linear_acceleration.y = acc1[1]
+            imu1.linear_acceleration.z = acc1[2]
             imu1.header.stamp = rospy.Time.now()
-            imu2.angular_velocity.x = self.quad2.state[6]
-            imu2.angular_velocity.y = self.quad2.state[7]
-            imu2.angular_velocity.z = self.quad2.state[8]
-            imu2.linear_acceleration.x = self.quad2.state[9]
-            imu2.linear_acceleration.y = self.quad2.state[10]
-            imu2.linear_acceleration.z = self.quad2.state[11]
+            imu2.angular_velocity.x = self.quad2.state[9]
+            imu2.angular_velocity.y = self.quad2.state[10]
+            imu2.angular_velocity.z = self.quad2.state[11]
+            imu2.linear_acceleration.x = acc2[0]
+            imu2.linear_acceleration.y = acc2[1]
+            imu2.linear_acceleration.z = acc2[2]
             imu2.header.stamp = rospy.Time.now()
             # IMU PUBLISH
             self.imu1Publish(imu1)
